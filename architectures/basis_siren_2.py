@@ -13,8 +13,8 @@ class SL_siren_layer(eqx.Module):
     def __init__(self, N_features, N_modes, D, N_features_siren, N_layers_siren, key, eps=1e-1):
         keys = random.split(key, 3)
         self.A = random.normal(keys[0], [N_features, N_features, N_modes, D])*jnp.sqrt(2/N_features)
-        self.NN1 = siren([1, N_features_siren, N_modes], N_layers_siren, keys[1])
-        self.NN2 = siren([1, N_features_siren, N_modes], N_layers_siren, keys[2])
+        self.NN1 = siren.siren([1, N_features_siren, N_modes], N_layers_siren, keys[1])
+        self.NN2 = siren.siren([1, N_features_siren, N_modes], N_layers_siren, keys[2])
 
     def __call__(self, v, x, axis, eps_=1e-3):
         basis1 = self.NN1(jnp.expand_dims(x, 1))
