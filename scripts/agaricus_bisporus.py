@@ -1,4 +1,4 @@
-# Training FFNO to get a baseline accuracy for selected hyperparameters.
+# Training architecture with adaptive basis layer. Same basis for "analysis" and "synthesis", learnable for each individual layer. Initialised as random siren network.
 
 import jax.numpy as jnp
 import equinox as eqx
@@ -108,18 +108,18 @@ if __name__ == "__main__":
     parser = get_argparser()
     args = vars(parser.parse_args())
     script_name = sys.argv[0].split(".")[0]
-    
+
     header = ",".join([key for key in args.keys()])
     header += ",hash,final_loss,model_size,train_error,test_error,training_time"
     if not os.path.isfile(f"{args['path_to_results']}/results.csv"):
         with open(f"{args['path_to_results']}/results.csv", "w") as f:
             f.write(header)
-            
+
     data = jnp.load(args["path_to_dataset"])
     features = normalise_field(data["features"])
     targets = normalise_field(data["targets"])
     coordinates = data["coordinates"]
-    
+
     keys = random.split(random.PRNGKey(args["key"]), 2)
     D = features.ndim-2
     NN_args = [args["N_layers"], [features.shape[1] + coordinates.shape[0], args["N_features"], targets.shape[1]], args["N_modes"], features.ndim-2, args["N_features_siren"], args["N_layers_siren"], keys[0]]
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     ind_train, ind_test = jnp.arange(args["N_train"]), -jnp.arange(1, args["N_test"]+1)
     n = random.choice(keys[1], ind_train, shape = (args["N_updates"], args["N_batch"]))
     carry = [model, features, targets, coordinates, opt_state]
-    
+
     make_step_scan = lambda a, b: training_loop.make_step_scan(a, b, optim)
     start = time.time()
     res, losses = scan(make_step_scan, carry, n)
@@ -154,12 +154,12 @@ if __name__ == "__main__":
 
     # saving model and opt state
     exp_hash = hashlib.sha256(str.encode(script_name + "".join([str(args[k]) for k in args.keys()]))).hexdigest()
-    
+
     eqx.tree_serialise_leaves(f"{args['path_to_results']}/model_{exp_hash}.eqx", model)
     eqx.tree_serialise_leaves(f"{args['path_to_results']}/opt_state_{exp_hash}.eqx", opt_state)
 
     data = "\n" + ",".join([str(args[key]) for key in args.keys()])
     data += f",{exp_hash},{losses[-1]},{model_size},{jnp.mean(train_error)},{jnp.mean(test_error)},{training_time}"
-    
+
     with open(f"{args['path_to_results']}/results.csv", "a") as f:
         f.write(data)
