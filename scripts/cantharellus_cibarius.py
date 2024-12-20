@@ -20,7 +20,7 @@ def normalise_field(field):
     # field has shape (N_samples, N_features, N_x, N_y, ...)
     original_shape = field.shape
     field = field.reshape(field.shape[0], field.shape[1], -1)
-    field = field / jnp.max(jnp.linalg.norm(field, axis=2, keepdims=True), axis=0, keepdims=True)
+    field = field / jnp.max(jnp.max(jnp.abs(field), axis=2, keepdims=True), axis=0, keepdims=True)
     return field.reshape(original_shape)
 
 def get_argparser():

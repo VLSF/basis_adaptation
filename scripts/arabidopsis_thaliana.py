@@ -20,7 +20,7 @@ def normalise_field(field):
     # field has shape (N_samples, N_features, N_x, N_y, ...)
     original_shape = field.shape
     field = field.reshape(field.shape[0], field.shape[1], -1)
-    field = field / jnp.max(jnp.linalg.norm(field, axis=2, keepdims=True), axis=0, keepdims=True)
+    field = field / jnp.max(jnp.max(jnp.abs(field), axis=2, keepdims=True), axis=0, keepdims=True)
     return field.reshape(original_shape)
 
 def get_argparser():
@@ -98,18 +98,18 @@ if __name__ == "__main__":
     parser = get_argparser()
     args = vars(parser.parse_args())
     script_name = sys.argv[0].split(".")[0]
-    
+
     header = ",".join([key for key in args.keys()])
     header += ",hash,final_loss,model_size,train_error,test_error,training_time"
     if not os.path.isfile(f"{args['path_to_results']}/results.csv"):
         with open(f"{args['path_to_results']}/results.csv", "w") as f:
             f.write(header)
-            
+
     data = jnp.load(args["path_to_dataset"])
     features = normalise_field(data["features"])
     targets = normalise_field(data["targets"])
     coordinates = data["coordinates"]
-    
+
     keys = random.split(random.PRNGKey(args["key"]), 2)
     model = ffno.FFNO(args["N_layers"], [features.shape[1] + coordinates.shape[0], args["N_features"], targets.shape[1]], args["N_modes"], features.ndim-2, keys[0])
     model_size = sum(tree_map(jnp.size, tree_flatten(model)[0], is_leaf=eqx.is_array))
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     ind_train, ind_test = jnp.arange(args["N_train"]), -jnp.arange(1, args["N_test"]+1)
     n = random.choice(keys[1], ind_train, shape = (args["N_updates"], args["N_batch"]))
     carry = [model, features, targets, coordinates, opt_state]
-    
+
     make_step_scan = lambda a, b: training_loop.make_step_scan(a, b, optim)
     start = time.time()
     res, losses = scan(make_step_scan, carry, n)
@@ -135,12 +135,12 @@ if __name__ == "__main__":
 
     # saving model and opt state
     exp_hash = hashlib.sha256(str.encode(script_name + "".join([str(args[k]) for k in args.keys()]))).hexdigest()
-    
+
     eqx.tree_serialise_leaves(f"{args['path_to_results']}/model_{exp_hash}.eqx", model)
     eqx.tree_serialise_leaves(f"{args['path_to_results']}/opt_state_{exp_hash}.eqx", opt_state)
 
     data = "\n" + ",".join([str(args[key]) for key in args.keys()])
     data += f",{exp_hash},{losses[-1]},{model_size},{jnp.mean(train_error)},{jnp.mean(test_error)},{training_time}"
-    
+
     with open(f"{args['path_to_results']}/results.csv", "a") as f:
         f.write(data)
